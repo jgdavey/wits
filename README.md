@@ -1,5 +1,10 @@
 # wits
 
+## Requirements:
+
+- Leiningen 2.2 or higher: `brew install leiningen`
+- The compass gem: `gem install compass`
+
 ## Usage
 
 `cd` into the app directory:
