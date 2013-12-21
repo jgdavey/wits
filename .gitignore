@@ -1,0 +1,8 @@
+out/
+target/
+logs/
+.gem/
+.sass-cache/
+.lein-repl-history
+.nrepl-port
+.repl/

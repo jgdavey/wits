@@ -1,0 +1,124 @@
+@import "compass/reset";
+@import "compass";
+
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+#content {
+  margin: 10px auto;
+  padding: 0 25px;
+  min-width: 860px;
+  max-width: 1200px;
+
+
+  header {
+    margin-top: 20px;
+    h1 {
+      float: left;
+      font-size: 30px;
+    }
+    h1, dl {
+      line-height: 30px;
+    }
+  }
+}
+
+#stats {
+  float: right;
+  margin: 0 0 12px;
+
+  dt, dd {
+    display: inline;
+  }
+
+  dt:after {
+    content: ": "
+  }
+
+  dd {
+    font-weight: bold;
+  }
+}
+
+#board {
+  clear: both;
+
+  ul.slots {
+    width: 100%;
+    border: 1px solid #ccc;
+    list-style: none;
+    overflow: hidden;
+
+    > li {
+      -moz-box-sizing: border-box;
+      -webkit-box-sizing: border-box;
+      box-sizing: border-box;
+      padding: 10px 0;
+      min-height: 400px;
+      height: 400px;
+      float: left;
+      width: 12.5%;
+      border-left: 1px solid #ccc;
+      text-align: center;
+
+      &:first-child {
+        background-color: #eee;
+        border-left: 0 none;
+        p {
+          font-size: 18px;
+          margin-top: 52px;
+        }
+      }
+
+      p {
+        font-weight: bold;
+        margin: 10px 0;
+        line-height: 24px;
+        font-size: 24px;
+      }
+
+      .author {
+        @include border-radius(20px);
+        height: 40px;
+        width: 40px;
+        margin: 0 auto;
+      }
+
+      small {
+        color: #999;
+        display: block;
+        font-size: 12px;
+        width: 100%;
+        padding-bottom: 10px;
+        border-bottom: 1px dashed #ccc;
+      }
+
+      li {
+        line-height: 40px;
+        margin: 8px 0;
+        font-size: 20px;
+        color: #666;
+
+        &.me {
+          @include background-image(linear-gradient(#fff, #fafafa, #ddd));
+          @include border-radius(3px);
+          padding: 10px 0;
+          margin-left: 10px;
+          margin-right: 10px;
+          line-height: 1;
+          height: 40px;
+          cursor: move;
+        }
+
+        .bidder {
+          @include border-radius(20px);
+          vertical-align: middle;
+          height: 40px;
+          width: 40px;
+          margin-right: 10px;
+        }
+      }
+    }
+  }
+}
