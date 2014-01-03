@@ -88,7 +88,7 @@
                   :logging? true
                   :recording? true
                   :output-root :tools-public
-                  :template "tooling.html"
+                  :template "application.html"
                   :order 3}
             :development {:uri "/wits-dev.html"
                           :name "Development"

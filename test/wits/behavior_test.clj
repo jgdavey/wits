@@ -11,9 +11,9 @@
 
 ;; Test a transform function
 
-(deftest test-set-value-transform
-  (is (= (set-value-transform {} {msg/type :set-value msg/topic [:greeting] :value "x"})
-         "x")))
+; (deftest test-set-value-transform
+;   (is (= (set-value-transform {} {msg/type :set-value msg/topic [:greeting] :value "x"})
+;          "x")))
 
 ;; Build an application, send a message to a transform and check the transform
 ;; state
