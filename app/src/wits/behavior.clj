@@ -2,70 +2,151 @@
     (:require [clojure.string :as string]
               [io.pedestal.app :as app]
               [io.pedestal.app.messages :as msg]
-              [io.pedestal.app.dataflow :as dataflow]))
+              [io.pedestal.app.dataflow :as d]))
 
+(def odds [6 5 4 3 2 3 4 5])
+
+;; Transforms
 (defn swap-transform [_ message]
   (:value message))
 
-(defn publish-answer [{:keys [answer name]}]
-  (when (and answer name)
-    [{msg/type :swap msg/topic [:other-answers name] :value answer}]))
+(defn- number [string-or-int]
+  (let [n (int string-or-int)]
+    (when (and string-or-int (not (zero? n)))
+      n)))
 
-(defn- answer [message]
-  (int (:answer message)))
-
-(defn add-my-answer-transform [_ message]
-  (answer message))
+(defn add-answer-transform [_ message]
+  (number (:answer message)))
 
 (defn add-bid-transform [_ message]
-  (int (:bid message)))
+  (number (:bid message)))
+
+;; Effects
+(defn publish-answer [{:keys [answer name]}]
+  (when (and answer name)
+    [{msg/type :swap msg/topic [:answers name] :value answer}]))
+
+;; Derives
+(defn copy-value [_ value] value)
+
+(defn insert-in-middle [item coll]
+  (let [[head tail] (partition (/ (count coll) 2) coll)]
+    (concat head [item] tail)))
+
+(defn balance [coll]
+  (let [coll (if (even? (count coll))
+               (insert-in-middle nil coll)
+               coll)]
+    (case (count coll)
+      7 coll
+      5 (concat [nil] coll [nil])
+      3 (concat [nil nil] coll [nil nil])
+      1 (concat [nil nil nil] coll [nil nil nil]))))
+
+(defn remove-duplicates [coll]
+  (reduce (fn [v e]
+            (conj v (when (not (some #{e} v)) e))) [] coll))
 
 (defn group-by-val [hash]
-  (into (sorted-map) (reduce (fn [h [k v]]
-                         (assoc h v (conj (get h v []) k)))
-                       {}
-                       hash)))
+  (reduce (fn [h [k v]]
+            (assoc h v (conj (get h v []) k)))
+          {}
+          hash))
 
-(defn merge-answers [_ {:keys [me others login-name]}]
-  (assoc others login-name me))
+(defn prepend [coll val]
+  (->> (list* coll)
+       (cons val)
+       vec))
 
-(defn nonzero-value? [[k v]]
-  (when (and v (not (zero? v)))
-    [k v]))
+(defn rank-answers* [answers]
+  (-> answers
+      vals
+      sort
+      balance
+      (prepend nil)
+      remove-duplicates))
 
-(defn remove-zeros [nested-hash]
-  (reduce (fn [h [k ps]]
-            (assoc h k (into {} (filter nonzero-value? ps)))) {} nested-hash))
+(defn rank-answers [_ answers]
+  (->> answers
+       rank-answers*
+       (zipmap (range))))
 
-(defn merge-bids [_ {:keys [mine others login-name]}]
-  (let [m (reduce (fn [h [k v]] (assoc h k {login-name v})) {} mine)]
-    (remove-zeros (merge-with conj others m))))
+(defn bids-at [bids space]
+  (into {} (for [[bidder spaces] bids
+                 [s b] spaces
+                 :when (= space s)]
+             [bidder b])))
 
-(defn sort-answers [_ {:keys [answers]}]
-  (group-by-val answers))
+(defn create-board [_ {:keys [answers spaces bids]}]
+  (let [grouped-answers (group-by-val answers)]
+    (->> spaces
+         (into (sorted-map))
+         (map (fn [[s v]]
+                {:value v
+                 :answerers (get grouped-answers v)
+                 :bids (bids-at bids s)
+                 :odds (get odds s)}))
+         (zipmap (range))
+         (into (sorted-map)))))
 
-(defn start-game [inputs]
-  (let [active (dataflow/old-and-new inputs [:active-game])
-        login (dataflow/old-and-new inputs [:login :name])]
-    (when (or (and (:new login) (not (:old active)) (:new active))
-              (and (:new active) (not (:old login)) (:new login)))
-      [^:input {msg/topic msg/app-model msg/type :set-focus :name :game}])))
+(defn player-can-bid [_ vals]
+  (< (count (filter identity vals)) 2))
 
-(defn accept-answer [inputs]
-  (let [answer (dataflow/old-and-new inputs [:my-answer])]
-    (when (and (:new answer) (not (:old answer)))
-      [^:input {msg/topic msg/app-model msg/type :set-focus :name :wait}])))
-
-(defn provide-answer [inputs]
-  (let [login (dataflow/old-and-new inputs [:login :name])]
-    (when (and (:new login) (not (:old login)))
-      [^:input {msg/topic msg/app-model msg/type :set-focus :name :answer}])))
-
-
+;; Emitters
+; login
 (defn init-login [_]
-  [[:transform-enable [:login :name]
-    :login [{msg/topic [:login :name] msg/type :swap (msg/param :value) {}}]]])
+  [{:login
+    {:name
+     {:transforms
+      {:login [{msg/topic [:login :name] msg/type :swap (msg/param :value) {}}]}}}}])
 
+(defn- login-name-deltas [value]
+  [[:node-create [:login :name] :map]
+   [:value [:login :name] value]
+   [:transform-disable [:login :name] :login]
+   [:node-create [:login :my-answer] :map]
+   [:transform-enable [:login :my-answer] :add-answer
+    [{msg/topic [:answers :mine] (msg/param :answer) {}}]]])
+
+(defn- my-answer-deltas [value]
+  [[:node-create [:login :my-answer] :map]
+   [:value [:login :my-answer] value]])
+
+(defn login-emitter [inputs]
+  (reduce (fn [a [input-path new-value]]
+            (concat a (case input-path
+                        [:login :name] (login-name-deltas new-value)
+                        [:answers :mine] (my-answer-deltas new-value)
+                        [])))
+          []
+          (merge (d/added-inputs inputs) (d/updated-inputs inputs))))
+
+(defn emit-value [path value]
+  [[:node-create path]
+   [:value path value]])
+
+(defn remove-node [path]
+  [[:value path nil] [:node-destroy path]])
+
+(defn emit-map [path value]
+  (mapcat (fn [[p v]]
+            (let [pp (conj path p)]
+              (if (nil? v)
+                (remove-node pp)
+                (emit-value pp v)))) value))
+
+(defn board-deltas [path value]
+  (if (map? value)
+    (emit-map path value)
+    (emit-value path value)))
+
+(defn board-emitter [inputs]
+  (let [ins (merge (d/added-inputs inputs) (d/updated-inputs inputs))]
+    (mapcat (fn [[path value]]
+              (board-deltas path value)) ins)))
+
+;; Continue
+; wait screen
 (defn init-wait [_]
   (let [start-game {msg/type :swap msg/topic [:active-game] :value true}]
     [{:wait
@@ -74,65 +155,88 @@
        {:start-game [{msg/topic msg/effect :payload start-game}
                      start-game]}}}}]))
 
-(defn init-answer [_]
-  [[:transform-enable [:my-answer]
-    :add-answer [{msg/topic [:my-answer] (msg/param :answer) {} }]]])
+(defn start-game [inputs]
+  (let [active (d/old-and-new inputs [:active-game])
+        login (d/old-and-new inputs [:login :name])]
+    (when (or (and (:new login) (not (:old active)) (:new active))
+              (and (:new active) (not (:old login)) (:new login)))
+      [^:input {msg/topic msg/app-model msg/type :set-focus :name :game}])))
 
+(defn wait-for-other-answers [inputs]
+  (let [answer (d/old-and-new inputs [:answers :mine])
+        login (d/old-and-new inputs [:login :name])]
+    (when (or (and (:new login) (not (:old answer)) (:new answer))
+              (and (:new answer) (not (:old login)) (:new login)))
+      [^:input {msg/topic msg/app-model msg/type :set-focus :name :wait}])))
+
+
+; main game
 (defn init-game [app]
-  (let [answers (keys (get-in app [:new-model :sorted-answers]))]
-    [{:wits
-      {:my-bids
-       (into {} (map (fn [p]
-                       [p {:transforms
-                           {:add-bid [{msg/topic [:my-bids p] (msg/param :bid) {}}]
-                            :remove-bid [{msg/topic [:my-bids p]}]}}])
-                     answers))}}]))
+  (let [answers (keys (get-in app [:new-model :board]))
+        finish-game {msg/type :swap msg/topic [:active-game] :value false}]
+    (concat [[:node-create [:wits :finish]]
+             [:transform-enable [:wits :finish] :finish-game [{msg/type msg/effect :payload finish-game} finish-game]]
+             [:node-create [:board] :vector]]
 
+            (mapcat (fn [p]
+                      [[:node-create [:board p]]
+                       [:transform-enable [:board p] :add-bid [{msg/topic [:bids :mine p] (msg/param :bid) {}}]]
+                       [:transform-enable [:board p] :remove-bid [{msg/topic [:bids :mine p]}]]])
+                 answers))))
+
+(defn finish-game [inputs]
+  (let [active (d/old-and-new inputs [:active-game])]
+    (when (and (:old active) (not (:new active)))
+      [^:input {msg/topic msg/app-model msg/type :set-focus :name :score}])))
+
+
+; scoreboard
+(defn init-scoreboard [])
 
 ;; Data Model Paths:
-;; [:login :name] - Nickname for chat user
-;; [:players] - All participants
-;; [:my-answer]
-;; [:other-answers]
-;; [:my-bid]
-;; [:other-bids]
+;; [:system :question] - original question
+;; [:system :answer]   - correct answer
+;; [:player :name]      - Nickname for user
+;; [:answers :mine]
+;; [:answers :*]
+;; [:bids :mine]
+;; [:bids :*]
 
 ;; App Model Paths:
-;; [:login :name]   - Displays chat user
-;; [:wait :*]       - Waiting for all players
-;; [:wits :answers] - All answers
-;; [:wits :bids]    - All bids
-
+;; [:login :name]        - Displays user's login
+;; [:login :my-answer]   - Provide an answer
+;; [:wits :answers]      - All answers, by player
+;; [:wits :bids]         - All bids, by player
+;; [:scoreboard :scores] - All scores, by player
 
 (def example-app
   {:version 2
    :debug true
-   :transform [[:swap       [:**]           swap-transform]
-               [:add-answer [:my-answer]    add-my-answer-transform]
-               [:add-bid    [:my-bids :*]   add-bid-transform]
-               [:remove-bid [:my-bids :*]   (constantly nil)]
-               [:debug      [:pedestal :**] swap-transform]]
+   :transform [[:swap       [:**]            swap-transform]
+               [:add-answer [:answers :mine] add-answer-transform]
+               [:add-bid    [:bids :**]      add-bid-transform]
+               [:remove-bid [:bids :**]      (constantly nil)]
+               [:debug      [:pedestal :**]  swap-transform]]
    :continue #{[#{[:active-game]} start-game]
-               [#{[:login :name]} provide-answer]
-               [#{[:my-answer]}   accept-answer]}
-   :derive #{[{[:my-answer] :me [:other-answers] :others [:login :name] :login-name}
-              [:answers]
-              merge-answers :map]
-             [{[:my-bids] :mine [:other-bids] :others [:login :name] :login-name}
-              [:bids]
-              merge-bids :map]
-             [{[:answers] :answers} [:sorted-answers] sort-answers :map]}
-   :effect #{[{[:my-answer] :answer [:login :name] :name} publish-answer :map]}
+               [#{[:active-game]} finish-game]
+               [#{[:login :name] [:answers :mine]} wait-for-other-answers]}
+   :derive #{[#{[:login :name]} [:player :name] copy-value :single-val]
+             [#{[:bids :mine :*]} [:player :can-bid] player-can-bid :vals]
+             [#{[:answers]} [:ranked-answers] rank-answers :single-val]
+             [{[:ranked-answers] :spaces [:answers] :answers [:bids] :bids}
+              [:board] create-board :map]}
+   :effect #{[{[:answers :mine] :answer [:player :name] :name} publish-answer :map]}
    :emit [{:init init-login}
-          [#{[:login :*]} (app/default-emitter [])]
-          {:init init-answer}
-          [#{[:my-answer]} (app/default-emitter [])]
+          [#{[:login :*] [:answers :mine]} login-emitter]
           {:init init-wait}
-          {:in #{[:players :*] [:login :*] [:answers :*]} :fn (app/default-emitter [:wait]) :mode :always}
+          {:in #{[:player :*] [:answers :*]} :fn (app/default-emitter [:wait]) :mode :always}
           {:init init-game}
-          [#{[:login :*] [:bids :*] [:my-bids :*] [:sorted-answers :*]} (app/default-emitter [:wits])] ]
+          {:in #{[:board :* :*]} :fn board-emitter :mode :always}
+          {:in #{[:player :*]} :fn (app/default-emitter [:wits]) :mode :always}
+          {:init init-scoreboard}
+          {:in #{[:scores :*]} :fn (app/default-emitter [:scoreboard]) :mode :always}]
    :focus {:login  [[:login]]
-           :answer [[:my-answer]]
            :wait   [[:wait]]
-           :game   [[:wits] [:pedestal]]
+           :game   [[:wits] [:board] [:pedestal]]
+           :score  [[:scoreboard]]
            :default :login}})
