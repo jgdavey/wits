@@ -20,11 +20,18 @@
   (let [target (rand-nth (vals @answers))]
     (p/put-message input-queue {msg/topic [:other-bids target player-name]
                                 msg/type :swap
-                                :value (rand-int 3)})))
+                                :value (inc (rand-int 3))})))
+
+(defn correct-answer [input-queue]
+  (let [answer (inc (rand-int 24))
+        message {msg/type :swap msg/topic [:system :answer] :value answer}]
+    (p/put-message input-queue message)))
 
 (defn receive-messages [input-queue]
-  (platform/create-timeout 3000 #(provide-bid "player-abc" input-queue))
-  (platform/create-timeout 2000 #(provide-bid "player-xyz" input-queue)))
+  (platform/create-timeout 2000 #(provide-bid "player-abc" input-queue))
+  (platform/create-timeout 3000 #(provide-bid "player-xyz" input-queue))
+  (platform/create-timeout 4000 #(provide-bid "player-abc" input-queue))
+  (platform/create-timeout 8000 #(provide-bid "player-xyz" input-queue)))
 
 (defn start-game-simulation [input-queue]
   (receive-messages input-queue))
@@ -32,8 +39,9 @@
 (defrecord MockServices [app]
   p/Activity
   (start [this]
-    (platform/create-timeout 3000 #(provide-answer "player-abc" (:input app)))
-    (platform/create-timeout 2000 #(provide-answer "player-xyz" (:input app))))
+    (platform/create-timeout 1000 #(correct-answer (:input app)))
+    (platform/create-timeout 2000 #(provide-answer "player-abc" (:input app)))
+    (platform/create-timeout 2800 #(provide-answer "player-xyz" (:input app))))
   (stop [this]))
 
 (defn services-fn [message input-queue]

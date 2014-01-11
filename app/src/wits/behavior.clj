@@ -51,6 +51,11 @@
               (and (:new active) (not (:old login)) (:new login)))
       [^:input {msg/topic msg/app-model msg/type :set-focus :name :game}])))
 
+(defn finish-game [inputs]
+  (let [active (dataflow/old-and-new inputs [:active-game])]
+    (when (and (:old active) (not (:new active)))
+      [^:input {msg/topic msg/app-model msg/type :set-focus :name :score}])))
+
 (defn accept-answer [inputs]
   (let [answer (dataflow/old-and-new inputs [:my-answer])]
     (when (and (:new answer) (not (:old answer)))
@@ -79,15 +84,21 @@
     :add-answer [{msg/topic [:my-answer] (msg/param :answer) {} }]]])
 
 (defn init-game [app]
-  (let [answers (keys (get-in app [:new-model :sorted-answers]))]
+  (let [answers (keys (get-in app [:new-model :sorted-answers]))
+        finish-game {msg/type :swap msg/topic [:active-game] :value false}]
     [{:wits
-      {:my-bids
+      {:finish
+       {:transforms
+        {:finish-game [{msg/type msg/effect :payload finish-game}
+                       finish-game]}}
+      :my-bids
        (into {} (map (fn [p]
                        [p {:transforms
                            {:add-bid [{msg/topic [:my-bids p] (msg/param :bid) {}}]
                             :remove-bid [{msg/topic [:my-bids p]}]}}])
                      answers))}}]))
 
+(defn init-scoreboard [])
 
 ;; Data Model Paths:
 ;; [:login :name] - Nickname for chat user
@@ -113,6 +124,7 @@
                [:remove-bid [:my-bids :*]   (constantly nil)]
                [:debug      [:pedestal :**] swap-transform]]
    :continue #{[#{[:active-game]} start-game]
+               [#{[:active-game]} finish-game]
                [#{[:login :name]} provide-answer]
                [#{[:my-answer]}   accept-answer]}
    :derive #{[{[:my-answer] :me [:other-answers] :others [:login :name] :login-name}
@@ -130,9 +142,12 @@
           {:init init-wait}
           {:in #{[:players :*] [:login :*] [:answers :*]} :fn (app/default-emitter [:wait]) :mode :always}
           {:init init-game}
-          [#{[:login :*] [:bids :*] [:my-bids :*] [:sorted-answers :*]} (app/default-emitter [:wits])] ]
+          [#{[:system :*] [:login :*] [:bids :*] [:my-bids :*] [:sorted-answers :*]} (app/default-emitter [:wits])]
+          {:init init-scoreboard}
+          [#{[:bids :*] [:scores :*]} (app/default-emitter [:scoreboard])] ]
    :focus {:login  [[:login]]
            :answer [[:my-answer]]
            :wait   [[:wait]]
            :game   [[:wits] [:pedestal]]
+           :score  [[:scoreboard]]
            :default :login}})
