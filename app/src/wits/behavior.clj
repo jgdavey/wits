@@ -1,8 +1,8 @@
 (ns ^:shared wits.behavior
-    (:require [clojure.string :as string]
-              [io.pedestal.app :as app]
-              [io.pedestal.app.messages :as msg]
-              [io.pedestal.app.dataflow :as d]))
+  (:require [clojure.string :as string]
+            [io.pedestal.app :as app]
+            [io.pedestal.app.messages :as msg]
+            [io.pedestal.app.dataflow :as d]))
 
 (def odds [6 5 4 3 2 3 4 5])
 
@@ -61,10 +61,11 @@
 (defn rank-answers* [answers]
   (-> answers
       vals
+      set
       sort
+      vec
       balance
-      (prepend nil)
-      remove-duplicates))
+      (prepend nil)))
 
 (defn rank-answers [_ answers]
   (->> answers
@@ -77,6 +78,16 @@
                  :when (= space s)]
              [bidder b])))
 
+(defn player-can-bid [vals]
+  (< (count (filter identity vals)) 2))
+
+(defn biddable [bids space val?]
+  (if (get bids space)
+    :remove
+    (if (and (player-can-bid (vals bids)) val?)
+      :add
+      :none)))
+
 (defn create-board [_ {:keys [answers spaces bids]}]
   (let [grouped-answers (group-by-val answers)]
     (->> spaces
@@ -85,12 +96,10 @@
                 {:value v
                  :answerers (get grouped-answers v)
                  :bids (bids-at bids s)
+                 :biddable (biddable (:mine bids) s v)
                  :odds (get odds s)}))
          (zipmap (range))
          (into (sorted-map)))))
-
-(defn player-can-bid [_ vals]
-  (< (count (filter identity vals)) 2))
 
 ;; Emitters
 ; login
@@ -135,15 +144,29 @@
                 (remove-node pp)
                 (emit-value pp v)))) value))
 
+(defn emit-biddability [path value]
+  (let [p (last path)
+        add [{msg/topic [:bids :mine p] (msg/param :bid) {}}]
+        remove [{msg/topic [:bids :mine p]}]]
+    (case value
+      :add [[:transform-disable path :remove-bid remove]
+            [:transform-enable path :add-bid add]]
+      :remove [[:transform-enable path :remove-bid remove]
+               [:transform-disable path :add-bid add]]
+      :none [[:transform-disable path :remove-bid remove]
+             [:transform-disable path :add-bid add]])))
+
 (defn board-deltas [path value]
   (if (map? value)
     (emit-map path value)
     (emit-value path value)))
 
 (defn board-emitter [inputs]
-  (let [ins (merge (d/added-inputs inputs) (d/updated-inputs inputs))]
+  (let [ins (merge (d/added-inputs inputs) (d/updated-inputs inputs) (d/removed-inputs inputs))]
     (mapcat (fn [[path value]]
-              (board-deltas path value)) ins)))
+              (case (last path)
+                :biddable (emit-biddability (vec (butlast path)) value)
+                (board-deltas path value))) ins)))
 
 ;; Continue
 ; wait screen
@@ -178,11 +201,8 @@
              [:transform-enable [:wits :finish] :finish-game [{msg/type msg/effect :payload finish-game} finish-game]]
              [:node-create [:board] :vector]]
 
-            (mapcat (fn [p]
-                      [[:node-create [:board p]]
-                       [:transform-enable [:board p] :add-bid [{msg/topic [:bids :mine p] (msg/param :bid) {}}]]
-                       [:transform-enable [:board p] :remove-bid [{msg/topic [:bids :mine p]}]]])
-                 answers))))
+            (mapcat (fn [p] [[:node-create [:board p]]
+                             [:node-create [:board p :bids] :map]]) answers))))
 
 (defn finish-game [inputs]
   (let [active (d/old-and-new inputs [:active-game])]
@@ -221,7 +241,6 @@
                [#{[:active-game]} finish-game]
                [#{[:login :name] [:answers :mine]} wait-for-other-answers]}
    :derive #{[#{[:login :name]} [:player :name] copy-value :single-val]
-             [#{[:bids :mine :*]} [:player :can-bid] player-can-bid :vals]
              [#{[:answers]} [:ranked-answers] rank-answers :single-val]
              [{[:ranked-answers] :spaces [:answers] :answers [:bids] :bids}
               [:board] create-board :map]}
