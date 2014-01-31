@@ -22,11 +22,6 @@
                                 msg/type :swap
                                 :value (inc (rand-int 3))})))
 
-(defn correct-answer [input-queue]
-  (let [answer (inc (rand-int 24))
-        message {msg/type :swap msg/topic [:system :answer] :value answer}]
-    (p/put-message input-queue message)))
-
 (defn receive-messages [input-queue]
   (platform/create-timeout 2000 #(provide-bid "player-abc" input-queue))
   (platform/create-timeout 3000 #(provide-bid "player-xyz" input-queue))
@@ -36,18 +31,29 @@
 (defn start-game-simulation [input-queue]
   (receive-messages input-queue))
 
+(defn send-start-message [input-queue]
+  (let [message {msg/type :swap msg/topic [:active-game] :value true}]
+    (p/put-message input-queue {msg/topic msg/effect :payload message})
+    (p/put-message input-queue message)))
+
+(defn send-question-and-answer [input-queue]
+  (p/put-message input-queue {msg/type :swap msg/topic [:question]
+                              :value "What is the airspeed velocity of an unladen swallow, in MPH?"})
+  (p/put-message input-queue {msg/type :swap msg/topic [:answer] :value 42}))
+
 (defrecord MockServices [app]
   p/Activity
   (start [this]
-    (platform/create-timeout 1000 #(correct-answer (:input app)))
+    (platform/create-timeout 100 #(send-question-and-answer (:input app)))
     (platform/create-timeout 2000 #(provide-answer "player-abc" (:input app)))
-    (platform/create-timeout 2800 #(provide-answer "player-xyz" (:input app))))
+    (platform/create-timeout 2800 #(provide-answer "player-xyz" (:input app)))
+    (platform/create-timeout 8000 #(send-start-message (:input app))))
   (stop [this]))
 
 (defn services-fn [message input-queue]
   (cond (and (= (msg/topic message) [:active-game]) (:value message))
-        (start-game-simulation input-queue)
+          (start-game-simulation input-queue)
         (= (first (msg/topic message)) :answers)
-        (update-answer message)
+          (update-answer message)
         :else
-        (.log js/console (str "Sending message to server: " message))))
+          (.log js/console (str "Sending message to server: " message))))

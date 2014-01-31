@@ -84,7 +84,7 @@
 (defn biddable [bids space val?]
   (if (get bids space)
     :remove
-    (if (and (player-can-bid (vals bids)) val?)
+    (if (and (player-can-bid (vals bids)) (or val? (zero? space)))
       :add
       :none)))
 
@@ -93,7 +93,7 @@
     (->> spaces
          (into (sorted-map))
          (map (fn [[s v]]
-                {:value v
+                {:value (if (zero? s) 0 v)
                  :answerers (get grouped-answers v)
                  :bids (bids-at bids s)
                  :biddable (biddable (:mine bids) s v)
@@ -121,11 +121,16 @@
   [[:node-create [:login :my-answer] :map]
    [:value [:login :my-answer] value]])
 
+(defn- system-question-deltas [value]
+  [[:node-create [:login :question] :map]
+   [:value [:login :question] value]])
+
 (defn login-emitter [inputs]
   (reduce (fn [a [input-path new-value]]
             (concat a (case input-path
                         [:login :name] (login-name-deltas new-value)
                         [:answers :mine] (my-answer-deltas new-value)
+                        [:question] (system-question-deltas new-value)
                         [])))
           []
           (merge (d/added-inputs inputs) (d/updated-inputs inputs))))
@@ -164,9 +169,10 @@
 (defn board-emitter [inputs]
   (let [ins (merge (d/added-inputs inputs) (d/updated-inputs inputs) (d/removed-inputs inputs))]
     (mapcat (fn [[path value]]
-              (case (last path)
-                :biddable (emit-biddability (vec (butlast path)) value)
-                (board-deltas path value))) ins)))
+              (cond
+                (= path [:board 0 :value]) [[:value [:board 0 :value] "All too high"]]
+                (= (last path) :biddable) (emit-biddability (vec (butlast path)) value)
+                :else (board-deltas path value))) ins)))
 
 ;; Continue
 ; wait screen
@@ -180,9 +186,9 @@
 
 (defn start-game [inputs]
   (let [active (d/old-and-new inputs [:active-game])
-        login (d/old-and-new inputs [:login :name])]
-    (when (or (and (:new login) (not (:old active)) (:new active))
-              (and (:new active) (not (:old login)) (:new login)))
+        answer (d/old-and-new inputs [:answers :mine])]
+    (when (or (and (:new answer) (not (:old active)) (:new active))
+              (and (:new active) (not (:old answer)) (:new answer)))
       [^:input {msg/topic msg/app-model msg/type :set-focus :name :game}])))
 
 (defn wait-for-other-answers [inputs]
@@ -214,8 +220,8 @@
 (defn init-scoreboard [])
 
 ;; Data Model Paths:
-;; [:system :question] - original question
-;; [:system :answer]   - correct answer
+;; [:question] - original question
+;; [:answer]   - correct answer
 ;; [:player :name]      - Nickname for user
 ;; [:answers :mine]
 ;; [:answers :*]
@@ -237,7 +243,7 @@
                [:add-bid    [:bids :**]      add-bid-transform]
                [:remove-bid [:bids :**]      (constantly nil)]
                [:debug      [:pedestal :**]  swap-transform]]
-   :continue #{[#{[:active-game]} start-game]
+   :continue #{[#{[:active-game] [:answers :mine]} start-game]
                [#{[:active-game]} finish-game]
                [#{[:login :name] [:answers :mine]} wait-for-other-answers]}
    :derive #{[#{[:login :name]} [:player :name] copy-value :single-val]
@@ -246,14 +252,14 @@
               [:board] create-board :map]}
    :effect #{[{[:answers :mine] :answer [:player :name] :name} publish-answer :map]}
    :emit [{:init init-login}
-          [#{[:login :*] [:answers :mine]} login-emitter]
+          {:in #{[:login :*] [:answers :mine] [:question]} :fn login-emitter :mode :always}
           {:init init-wait}
-          {:in #{[:player :*] [:answers :*]} :fn (app/default-emitter [:wait]) :mode :always}
+          {:in #{[:player :*] [:answers :*] [:question]} :fn (app/default-emitter [:wait]) :mode :always}
           {:init init-game}
           {:in #{[:board :* :*]} :fn board-emitter :mode :always}
-          {:in #{[:player :*]} :fn (app/default-emitter [:wits]) :mode :always}
+          {:in #{[:player :*] [:question]} :fn (app/default-emitter [:wits]) :mode :always}
           {:init init-scoreboard}
-          {:in #{[:scores :*]} :fn (app/default-emitter [:scoreboard]) :mode :always}]
+          {:in #{[:scores :*] [:question] [:answer]} :fn (app/default-emitter [:scoreboard]) :mode :always}]
    :focus {:login  [[:login]]
            :wait   [[:wait]]
            :game   [[:wits] [:board] [:pedestal]]

@@ -1,0 +1,27 @@
+<_within file="application.html">
+
+  <div id="content">
+    <div id="login">
+      <form id="login-form" field="class:class" template="login-form">
+        <p>Please choose a name</p>
+
+        <input type="text" id="login-name" value="Murphy" field="value:name">
+        <button id="login-button">Login</button>
+      </form>
+
+      <p template="login-value" field="class:class,id:id">
+        <span class="key">Name</span>
+        <span class="value" field="content:name">Murphy</span>
+      </p>
+
+      <p template="question" field="content:question,id:id">What is the airspeed velocity of an unladen swallow?</p>
+
+      <form template="answer-form" field="class:class,id:id">
+
+        <input type="text" id="answer" value="">
+        <button id="answer-button">Send</button>
+      </form>
+    </div>
+  </div>
+
+</_within>

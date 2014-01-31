@@ -1,125 +1,131 @@
 <_within file="application.html">
   <div id="content">
-    <div template="hello" field="id:id">
-      <header>
-        <h1>Witz and Wagerz</h1>
-        <dl id="stats">
-          <dt>Chips</dt>
-          <dd>14</dd>
-        </dl>
-      </header>
+    <div template="wits" field="id:id">
       <div id="board">
-        <ul class="slots">
+        <ul id="slots">
           <li>
-            <p>Smaller</p>
             <small>pays 6 to 1</small>
+            <p>Smaller</p>
             <ul class="bids">
               <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                1
+                <span class="bidder">Dave</span>
+                <span class="bid">1</span>
               </li>
             </ul>
+            <div class="actions">
+              <form class="add-bid">
+                <input type="text" value="1" name="bid" maxlength="2"/>
+                <button type="submit">Add bid</button>
+              </form>
+              <button class="remove-bid">Remove bid</button>
+            </div>
           </li>
           <li>
-            <img class="author" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-            <p>10</p>
             <small>pays 5 to 1</small>
+            <p class="authors" field="content:answerers">
+              Sam
+            </p>
+            <p class="answer">10</p>
             <ul class="bids">
               <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                2
-              </li>
-              <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                3
+                <span class="bidder">Jane</span>
+                <span class="bid">1</span>
               </li>
               <li class="me">
-                <button>-</button>
-                  1
-                <button>+</button>
+                <span class="bidder">Me</span>
+                <span class="bid">2</span>
+              </li>
+              <li>
+                <span class="bidder">Jim</span>
+                <span class="bid">1</span>
               </li>
             <ul>
           </li>
           <li>
-            <img class="author" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-            <p>12</p>
             <small>pays 4 to 1</small>
+            <p class="authors" field="content:answerers">
+              Dave
+            </p>
+            <p class="answer">12</p>
             <ul class="bids">
               <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                3
-              </li>
-              <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                1
+                <span class="bidder">Dave</span>
+                <span class="bid">1</span>
               </li>
             <ul>
           </li>
           <li>
-            <img class="author" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-            <p>14</p>
             <small>pays 3 to 1</small>
+            <p class="authors" field="content:answerers">
+              Jane
+            </p>
+            <p class="answer">13</p>
             <ul class="bids">
               <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                1
+                <span class="bidder">Sam</span>
+                <span class="bid">1</span>
               </li>
               <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                3
-              </li>
-              <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                2
+                <span class="bidder">Dave</span>
+                <span class="bid">2</span>
               </li>
             <ul>
           </li>
           <li>
-            <img class="author" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-            <p>18</p>
             <small>pays 2 to 1</small>
+            <p class="authors" field="content:answerers">
+              Other guy
+            </p>
+            <p class="answer">14</p>
             <ul class="bids">
               <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                1
-              </li>
-              <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                3
+                <span class="bidder">Dave</span>
+                <span class="bid">1</span>
               </li>
             <ul>
           </li>
           <li>
-            <img class="author" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-            <p>31</p>
             <small>pays 3 to 1</small>
+            <p class="authors" field="content:answerers">
+              Other guy
+            </p>
+            <p class="answer">15</p>
             <ul class="bids">
             <ul>
           </li>
-          <li>
-            <img class="author" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-            <p>34</p>
-            <small>pays 4 to 1</small>
+
+          <li template="slot" field="id:id">
+            <small>pays <strong field="content:odds">4</strong> to 1</small>
+            <p class="authors" field="content:answerers">
+              Josh
+            </p>
+            <p class="answer" field="content:value">34</p>
             <ul class="bids">
               <li class="me">
-                <button>-</button>
-                  1
-                <button>+</button>
+                1
               </li>
-              <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                3
+              <li template="bid" field="id:id,class:class">
+                <span class="bidder" field="content:bidder">Jim</span>
+                <span class="bid" field="content:bid">3</span>
               </li>
             <ul>
+            <div class="actions">
+              <form class="add-bid hide">
+                <input type="text" value="1" name="bid" maxlength="2"/>
+                <button type="submit">Add bid</button>
+              </form>
+              <button class="remove-bid hide">Remove bid</button>
+            </div>
           </li>
+
           <li>
-            <img class="author" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-            <p>57</p>
             <small>pays 5 to 1</small>
+            <p class="authors">Foobar</p>
+            <p class="answer">57</p>
             <ul class="bids">
               <li>
-                <img class="bidder" src="https://s.gravatar.com/avatar/75b162d9c925b3cfb4d20322307be5d0?s=80" />
-                1
+                <span class="bidder">Jim</span>
+                <span class="bid">1</span>
               </li>
             <ul>
           </li>
